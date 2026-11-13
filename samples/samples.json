@@ -1,0 +1,7 @@
+[
+  {"question": "Will it rain in Toronto on Dec 1?", "volume": 120000, "category": "weather"},
+  {"question": "Will the Fed cut rates in December?", "volume": 450000, "category": "economics"},
+  {"question": "Will Bitcoin close above 100k on Dec 31?", "volume": 890000, "category": "crypto"},
+  {"question": "Will a new AI model be released this month?", "volume": 60000, "category": "tech"},
+  {"question": "Will unemployment rise next report?", "volume": 230000, "category": "economics"}
+]
