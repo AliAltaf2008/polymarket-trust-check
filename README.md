@@ -20,4 +20,4 @@ python -m pytest
 _To be written._
 
 ## Limitations
-_To be written._
+1. Ordering by volume gives the most famous and liquid marekts so the samples are skewed towards big political and event markets and will affect how much "similar markets" can be trusted for smaller markets
