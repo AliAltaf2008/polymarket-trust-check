@@ -21,6 +21,12 @@ def init_db(conn):
             volume REAL,
             liquidity REAL,
             closed INTEGER
+            close_time TEXT,
+            winner TEXT,
+            ref_price REAL,
+            tags TEXT
+            is_sports INTEGER,
+            was_disputed INTEGER
         )
         """
 
@@ -43,17 +49,28 @@ def market_to_row(m):
         int(m["closed"]),  # True/False becomes 1/0
     )
 
+UPSERT_SQL = """
+INSERT INTO markets
+    (id, question, slug, condition_id, event_id, end_date, volume, liquidity, closed)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(id) DO UPDATE SET
+    question = excluded.question,
+    slug = excluded.slug,
+    condition_id = excluded.condition_id,
+    event_id = excluded.event_id,
+    end_date = excluded.end_date,
+    volume = excluded.volume,
+    liquidity = excluded.liquidity,
+    closed = excluded.closed
+"""
+
 def load_markets(conn, path=MARKETS_JSON):
     with open(path) as f:
         markets = json.load(f)
 
     rows = [market_to_row(m) for m in markets]
 
-    conn.executemany(
-        "INSERT INTO markets VALUES (?, ? ,?, ?, ? , ?, ? , ? , ?)",
-        rows,
-    )
-
+    conn.executemany(UPSERT_SQL, rows)
     conn.commit()
     #How many new markets were added into the table
     return len(rows)
