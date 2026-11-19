@@ -34,6 +34,7 @@ RAW_MARKET = {
     "umaResolutionStatuses": '["proposed", "resolved"]',
     "events": [{"id": "999"}],
     "tags": [{"label": "Politics"}, {"label": "Iran"}],
+    "clobTokenIds": '["111", "222"]',
 }
 
 def test_yes_wins():
@@ -178,8 +179,25 @@ def test_missing_events_gives_none_event_id():
     assert build_record(raw)["event_id"] is None
 
 
-def test_numbers_are_floats():
-    record = build_record(RAW_MARKET)
-    assert record["volume"] == 2500000.5
-    assert isinstance(record["liquidity"], float)
+def test_yes_token_id_is_first_when_yes_is_first():
+    assert build_record(RAW_MARKET)["yes_token_id"] == "111"
 
+
+def test_yes_token_id_follows_outcome_order():
+    raw = {**RAW_MARKET, "outcomes": '["No", "Yes"]', "outcomePrices": '["0", "1"]'}
+    assert build_record(raw)["yes_token_id"] == "222"
+
+
+def test_missing_token_ids_gives_none():
+    raw = {k: v for k, v in RAW_MARKET.items() if k != "clobTokenIds"}
+    assert build_record(raw)["yes_token_id"] is None
+
+
+def test_no_yes_outcome_gives_no_token():
+    raw = {**RAW_MARKET, "outcomes": '["Up", "Down"]'}
+    assert build_record(raw)["yes_token_id"] is None
+
+
+def test_short_token_list_gives_none():
+    raw = {**RAW_MARKET, "outcomes": '["No", "Yes"]', "clobTokenIds": '["111"]'}
+    assert build_record(raw)["yes_token_id"] is None

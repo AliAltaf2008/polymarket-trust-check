@@ -63,6 +63,14 @@ def build_record(raw):
     outcomes = json.loads(raw.get("outcomes") or "[]")
     prices = [float(p) for p in json.loads(raw.get("outcomePrices") or "[]")]
     statuses = json.loads(raw.get("umaResolutionStatuses") or "[]")
+    token_ids = json.loads(raw.get("clobTokenIds") or "[]")
+
+    yes_token_id = None
+    if "Yes" in outcomes:
+        position = outcomes.index("Yes")
+        #In the case of malformed data from the API, we return None as the yes_token_id eg. ["No", "Yes"] is malformed data
+        if position < len(token_ids):
+            yes_token_id = token_ids[position]
 
     return {
         # id and conditionId must exist so it does not use .get() so its failure is known
@@ -80,4 +88,5 @@ def build_record(raw):
         "tags": json.dumps(labels),
         "is_sports": is_sports(labels),
         "was_disputed": was_disputed(statuses),
+        "yes_token_id": yes_token_id
     }
