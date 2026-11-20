@@ -31,3 +31,14 @@ Read-only use of Polymarket's public, documented APIs. No auth, no wallet.
 7. Tags are useful to filter markets based on sports, politics, etc. But sportsMarketType and gameId are not reliable for futures-style sports markets
 8. keyset call works with order=volumeNum date filters and volume_num_min
 8. Cluster by event_id. Many markets share an event which will cause clustering when sampling markets
+
+
+# API Filter Test (Nov 19)
+1. umaResolutionStatuses implies resolved at the end since it repeats proposed/disputed pairs that never end in resolved, but if you call umaResolutionStatus it returns resolved so I am assuming these repeated pairs imply resolved
+2. 7 of the 20 markets were disputed which requires heavy analysis so I will see if disputed markets heavily influence the data and if so, I will filter disputed markets out.
+3. Keep disputed markets as a flag for now and exclude it later if necessary
+
+# Price History Test on 3 Markets (Nov 19)
+1. price-history with the YES token and the fidelity=60 works for resolved markets
+2. Token check passed
+3. Sparse markets have gaps in price points despite API call requesting hourly price points. Suggests that the price movement is too stale to require a price point but will require further research
