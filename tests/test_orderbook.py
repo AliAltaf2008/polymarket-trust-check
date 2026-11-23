@@ -267,3 +267,49 @@ def test_no_schedule_when_fees_are_off_or_missing(market):
 def test_fees_enabled_without_a_schedule_raises():
     with pytest.raises(ValueError):
         fee_schedule_for({"feesEnabled": True})
+
+
+
+def test_walk_asks_reports_each_level_it_bought_from():
+    result = walk_asks(ASKS, 100)
+    assert result["fills"][0] == (0.50, pytest.approx(100.0))
+    assert result["fills"][1] == (0.52, pytest.approx(50 / 0.52))
+    assert sum(s for _, s in result["fills"]) == pytest.approx(result["shares"])
+
+
+def test_walk_asks_fills_are_empty_for_an_empty_book():
+    assert walk_asks([], 100)["fills"] == []
+
+
+def test_fee_and_total_for_a_small_buy():
+    result = trade_cost(BOOK, 30, LIVE)
+    assert result["fee"] == pytest.approx(0.75)             
+    assert result["cost_dollars"] == pytest.approx(0.60)
+    assert result["total_cost"] == pytest.approx(1.35)
+    assert result["total_pct"] == pytest.approx(1.35 / 30)  # 4.5%
+
+
+def test_fee_is_added_level_by_level_when_the_buy_crosses_levels():
+    result = trade_cost(BOOK, 100, LIVE)
+    assert result["fee"] == pytest.approx(2.45)
+    assert result["total_cost"] == pytest.approx(result["cost_dollars"] + 2.45)
+
+
+def test_no_schedule_means_zero_fee_and_total_equals_trade_cost():
+    result = trade_cost(BOOK, 30)
+    assert result["fee"] == 0.0
+    assert result["total_cost"] == pytest.approx(result["cost_dollars"])
+
+
+def test_the_fee_still_shows_without_a_midpoint_but_the_total_does_not():
+    result = trade_cost({"bids": [], "asks": BOOK["asks"]}, 30, LIVE)
+    assert result["fee"] == pytest.approx(0.75)
+    assert result["cost_dollars"] is None
+    assert result["total_cost"] is None
+    assert result["total_pct"] is None
+
+
+def test_nothing_filled_means_no_fee():
+    result = trade_cost({"bids": BOOK["bids"], "asks": []}, 30, LIVE)
+    assert result["fee"] == 0.0
+    assert result["total_cost"] is None
