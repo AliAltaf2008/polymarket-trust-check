@@ -1,6 +1,6 @@
 import pytest
 
-from trustcheck.orderbook import parse_book, walk_asks
+from trustcheck.orderbook import parse_book, walk_asks, trade_cost, taker_fee, fee_schedule_for
 
 
 def make_raw(bids=None, asks=None):
@@ -154,3 +154,116 @@ def test_spent_plus_unfilled_always_equals_the_amount(dollars):
 def test_shares_times_average_price_equals_spent(dollars):
     result = walk_asks(ASKS, dollars)
     assert result["shares"] * result["avg_price"] == pytest.approx(result["spent"])
+
+
+
+BOOK = {"bids": [(0.48, 100.0)], "asks": [(0.50, 100.0), (0.52, 200.0)]}  
+
+
+def test_midpoint_and_spread():
+    result = trade_cost(BOOK, 30)
+    assert result["mid"] == pytest.approx(0.49)
+    assert result["spread"] == pytest.approx(0.02)
+
+
+def test_cost_of_a_small_buy():
+    result = trade_cost(BOOK, 30)
+    assert result["cost_dollars"] == pytest.approx(0.60)    
+    assert result["cost_pct"] == pytest.approx(0.02)        
+
+
+def test_cost_grows_when_the_buy_reaches_deeper_levels():
+    result = trade_cost(BOOK, 100)
+    assert result["cost_dollars"] == pytest.approx(100 - 0.49 * (100 + 50 / 0.52))  
+    assert result["cost_pct"] == pytest.approx(0.0388, abs=1e-4)
+    assert result["cost_pct"] > trade_cost(BOOK, 30)["cost_pct"]
+
+
+def test_fill_numbers_pass_through_from_walk_asks():
+    result = trade_cost(BOOK, 1000)
+    assert result["spent"] == pytest.approx(154)
+    assert result["unfilled"] == pytest.approx(846)
+
+
+def test_no_bids_means_no_midpoint_and_no_cost_but_the_fill_still_works():
+    result = trade_cost({"bids": [], "asks": BOOK["asks"]}, 30)
+    assert result["mid"] is None
+    assert result["spread"] is None
+    assert result["cost_dollars"] is None
+    assert result["cost_pct"] is None
+    assert result["shares"] == pytest.approx(60)
+
+
+def test_no_asks_means_nothing_fills_and_no_cost():
+    result = trade_cost({"bids": BOOK["bids"], "asks": []}, 30)
+    assert result["shares"] == 0
+    assert result["avg_price"] is None
+    assert result["cost_dollars"] is None
+    assert result["cost_pct"] is None
+
+
+def test_a_tight_deep_book_on_a_cheap_market_still_costs_a_tick_percent():
+    deep = {"bids": [(0.06, 50000.0)], "asks": [(0.07, 50000.0)]}
+    assert trade_cost(deep, 100)["cost_pct"] == pytest.approx(0.005 / 0.07)
+
+
+def test_a_non_positive_amount_raises():
+    with pytest.raises(ValueError):
+        trade_cost(BOOK, 0)
+
+
+
+POLITICS = {"exponent": 1, "rate": 0.04, "takerOnly": True, "rebateRate": 0.25}
+LIVE = {"exponent": 1, "rate": 0.05, "takerOnly": True, "rebateRate": 0.25}  
+
+
+def test_no_schedule_means_no_fee():
+    assert taker_fee(100, 0.50, None) == 0.0
+
+
+def test_fee_matches_the_docs_table_at_the_peak():
+    assert taker_fee(100, 0.50, POLITICS) == pytest.approx(1.00)   
+    assert taker_fee(100, 0.50, LIVE) == pytest.approx(1.25)
+
+
+def test_fee_matches_the_docs_table_near_the_bottom():
+    assert taker_fee(100, 0.05, POLITICS) == pytest.approx(0.19)   
+
+
+def test_a_second_hand_checkable_example():
+    assert taker_fee(1000, 0.10, LIVE) == pytest.approx(4.5)     
+
+
+def test_fee_is_symmetric_around_fifty_percent():
+    assert taker_fee(100, 0.30, LIVE) == pytest.approx(taker_fee(100, 0.70, LIVE))
+
+
+@pytest.mark.parametrize("price", [0.0, 1.0])
+def test_fee_is_zero_at_the_extremes(price):
+    assert taker_fee(100, price, LIVE) == 0.0
+
+
+def test_a_tiny_fee_rounds_to_zero():
+    tiny = {"exponent": 1, "rate": 0.01, "takerOnly": True, "rebateRate": 0.25}
+    assert taker_fee(1, 0.0001, tiny) == 0.0                    
+
+
+@pytest.mark.parametrize("shares, price", [(-1, 0.5), (10, -0.1), (10, 1.1)])
+def test_bad_inputs_raise(shares, price):
+    with pytest.raises(ValueError):
+        taker_fee(shares, price, LIVE)
+
+
+def test_schedule_is_returned_when_fees_are_enabled():
+    market = {"feesEnabled": True, "feeSchedule": LIVE}
+    assert fee_schedule_for(market) == LIVE
+
+
+@pytest.mark.parametrize("market", [{"feesEnabled": False}, {}, {"feesEnabled": False, "feeSchedule": LIVE}])
+def test_no_schedule_when_fees_are_off_or_missing(market):
+    assert fee_schedule_for(market) is None
+
+
+def test_fees_enabled_without_a_schedule_raises():
+    with pytest.raises(ValueError):
+        fee_schedule_for({"feesEnabled": True})
