@@ -1,6 +1,6 @@
 import pytest
 
-from trustcheck.orderbook import parse_book, walk_asks, trade_cost, taker_fee, fee_schedule_for
+from trustcheck.orderbook import parse_book, walk_asks, trade_cost, taker_fee, fee_schedule_for, book_flags
 
 
 def make_raw(bids=None, asks=None):
@@ -313,3 +313,53 @@ def test_nothing_filled_means_no_fee():
     result = trade_cost({"bids": BOOK["bids"], "asks": []}, 30, LIVE)
     assert result["fee"] == 0.0
     assert result["total_cost"] is None
+
+def make_book(bids=(("0.50", "1000"),), asks=(("0.51", "1000"),), tick="0.01"):
+    raw = {
+        "bids": [{"price": p, "size": s} for p, s in bids],
+        "asks": [{"price": p, "size": s} for p, s in asks],
+        "tick_size": tick,
+        "min_order_size": "5",
+    }
+    return parse_book(raw)
+
+def test_flags_healthy_book_is_clean():
+    assert book_flags(make_book()) == []
+
+def test_flags_no_bids():
+    assert "no_bids" in book_flags(make_book(bids=()))
+
+def test_flags_no_asks():
+    assert "no_asks" in book_flags(make_book(asks=()))
+
+def test_flags_empty_book_has_both():
+    flags = book_flags(make_book(bids=(), asks=()))
+    assert "no_bids" in flags and "no_asks" in flags
+
+def test_flags_one_sided_book_has_no_wide_spread():
+    assert "wide_spread" not in book_flags(make_book(bids=()))
+
+def test_flags_wide_spread():
+    assert "wide_spread" in book_flags(make_book(bids=(("0.40", "1000"),), asks=(("0.50", "1000"),)))
+
+def test_flags_spread_of_exactly_five_ticks_is_fine():
+    assert "wide_spread" not in book_flags(make_book(bids=(("0.50", "1000"),), asks=(("0.55", "1000"),)))
+
+def test_flags_spread_of_six_ticks_is_flagged():
+    assert "wide_spread" in book_flags(make_book(bids=(("0.50", "1000"),), asks=(("0.56", "1000"),)))
+
+def test_flags_wide_spread_scales_with_tick_size():
+    tight = make_book(bids=(("0.500", "1000"),), asks=(("0.510", "1000"),), tick="0.01")
+    wide = make_book(bids=(("0.500", "1000"),), asks=(("0.510", "1000"),), tick="0.001")
+    assert "wide_spread" not in book_flags(tight)
+    assert "wide_spread" in book_flags(wide)
+
+def test_flags_thin_best_bid():
+    assert "thin_best_bid" in book_flags(make_book(bids=(("0.50", "100"),)))
+
+def test_flags_best_bid_of_exactly_100_dollars_is_not_thin():
+    assert "thin_best_bid" not in book_flags(make_book(bids=(("0.50", "200"),)))
+
+def test_flags_thin_is_judged_on_the_best_bid_only():
+    book = make_book(bids=(("0.50", "10"), ("0.45", "5000")))
+    assert "thin_best_bid" in book_flags(book)
