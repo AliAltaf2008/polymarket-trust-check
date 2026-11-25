@@ -42,3 +42,17 @@ Read-only use of Polymarket's public, documented APIs. No auth, no wallet.
 1. price-history with the YES token and the fidelity=60 works for resolved markets
 2. Token check passed
 3. Sparse markets have gaps in price points despite API call requesting hourly price points. Suggests that the price movement is too stale to require a price point but will require further research
+
+# One-page ingestion test for run_ingest.py (Nov 20, top_volume page of 20)
+1. processed 20, kept 13, dropped 7 (all sports). There were no build hsitrory or ref price drops and the counts add up
+2. Reference price split of the 13: 9 below 10%, 3 mid-range (10-90%), 1 above 90%
+3. Runtime for about 30 seconds so 1.5 seconds per market
+4. Sample was considering top_volume markets so the low drop counts are inaccurate
+
+# Volume Band ingestion test
+1. resulted in 9 markets where there were a lot of dependant events that cannot be filtered out since they are under different event ids
+2. they would potentially cause some bias in the statistics but a sensitivity check will show the true scale of its impact
+
+# Inquiries on Order Book
+1. /book returns bids ascending and asks descending so the best of each are the last entries in these lists
+2. prices and sizes are strings
