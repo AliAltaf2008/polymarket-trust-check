@@ -1,4 +1,5 @@
 from urllib.parse import urlparse
+import json
 
 VALID_HOSTS = {"polymarket.com", "www.polymarket.com"}
 
@@ -51,3 +52,4 @@ def choosable(markets):
     """Markets to offer the chooser where it is those that have traded and it goes from highest volume first"""
     traded = [m for m in markets if _volume(m) > 0]
     return sort_candidates(traded or markets)
+

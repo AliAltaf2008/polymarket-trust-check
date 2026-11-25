@@ -126,3 +126,28 @@ def taker_fee(shares, price, fee_schedule):
     exponent = float(fee_schedule["exponent"])
     fee = shares * rate * (price * (1-price)) ** exponent
     return round (fee, 5)
+
+WIDE_SPREAD_TICKS = 5          
+THIN_BEST_BID_DOLLARS = 100.0
+
+def book_flags(book):
+    flags = []
+    bids = book["bids"]
+    asks = book["asks"]
+
+    if not bids:
+        flags.append("no_bids")
+    if not asks:
+        flags.append("no_asks")
+
+    if bids and asks:
+        spread = asks[0][0] - bids[0][0]
+        if round(spread / book["tick_size"]) > WIDE_SPREAD_TICKS:
+            flags.append("wide_spread")
+
+    if bids:
+        price, size = bids[0]
+        if price * size < THIN_BEST_BID_DOLLARS:    
+            flags.append("thin_best_bid")
+
+    return flags
