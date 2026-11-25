@@ -1,5 +1,7 @@
 import math
 import bisect
+import json
+from trustcheck.ingest import is_recurring
 BUCKET_EDGES = [0.0, 0.05, 0.30, 0.50, 0.70, 1.0]
 NUM_BUCKETS = len(BUCKET_EDGES) - 1
 MIN_SAMPLE = 30
@@ -45,19 +47,23 @@ def bucket_bounds(index):
         raise ValueError(f"bucket index must be 0 to {NUM_BUCKETS-1}, got {index}")
     return BUCKET_EDGES[index], BUCKET_EDGES[index+1]
 
-def similar_record(conn, price):
+def similar_record(conn, price, exclude_recurring = False):
     target = bucket_index(price)
 
     rows = conn.execute(
-        "SELECT ref_price, winner FROM markets "
+        "SELECT ref_price, winner, tags FROM markets "
         "WHERE winner IS NOT NULL AND ref_price IS NOT NULL" 
     ).fetchall()
 
     n = 0
     yes = 0
-    for ref_price, winner in rows:
+    for ref_price, winner, tags in rows:
         if bucket_index(ref_price) != target:
             continue
+
+        if exclude_recurring and tags is not None:
+            if is_recurring(json.loads(tags)):
+                continue
         n += 1
         if winner == "Yes":
             yes+=1

@@ -20,13 +20,15 @@ def init_db(conn):
             end_date TEXT,
             volume REAL,
             liquidity REAL,
-            closed INTEGER
+            closed INTEGER,
             close_time TEXT,
             winner TEXT,
             ref_price REAL,
-            tags TEXT
+            tags TEXT,
             is_sports INTEGER,
-            was_disputed INTEGER
+            was_disputed INTEGER,
+            anchor_time TEXT,
+            ref_ts INTEGER
         )
         """
 
@@ -74,6 +76,29 @@ def load_markets(conn, path=MARKETS_JSON):
     conn.commit()
     #How many new markets were added into the table
     return len(rows)
+
+COLUMNS = [
+    "id", "question", "slug", "condition_id", "event_id", "end_date",
+    "volume", "liquidity", "closed", "close_time", "anchor_time",
+    "winner", "ref_price", "ref_ts", "tags", "is_sports", "was_disputed",
+]
+
+def _build_upsert_sql():
+    names = ", ".join(COLUMNS)
+    placeholders = ", ".join(f":{c}" for c in COLUMNS)
+    updates = ", ".join(f"{c} = excluded.{c}" for c in COLUMNS if c != "id")
+
+
+    return (
+        f"INSERT INTO markets ({names}) VALUES ({placeholders}) "
+        f"ON CONFLICT(id) DO UPDATE SET {updates}"
+    )
+
+RECORD_UPSERT_SQL = _build_upsert_sql()
+def upsert_record(conn, record):
+    params = {c:record.get(c) for c in COLUMNS}
+    conn.execute(RECORD_UPSERT_SQL, params)
+    conn.commit()
 
 def count_markets(conn):
     #Return the total rows in the table

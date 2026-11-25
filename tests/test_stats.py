@@ -1,3 +1,4 @@
+import json
 import sqlite3
 
 import pytest
@@ -179,15 +180,18 @@ def make_conn():
     return conn
 
 
-def save(conn, market_id, ref_price, winner):
-    upsert_record(conn, {"id": market_id, "ref_price": ref_price, "winner": winner})
+def save(conn, market_id, ref_price, winner, tags=None):
+    record = {"id": market_id, "ref_price": ref_price, "winner": winner}
+    if tags is not None:
+        record["tags"] = json.dumps(tags)
+    upsert_record(conn, record)
 
 
-def save_many(conn, price, yes, no):
+def save_many(conn, price, yes, no, tags=None, prefix=""):
     for i in range(yes):
-        save(conn, f"{price}-yes-{i}", price, "Yes")
+        save(conn, f"{prefix}{price}-yes-{i}", price, "Yes", tags)
     for i in range(no):
-        save(conn, f"{price}-no-{i}", price, "No")
+        save(conn, f"{prefix}{price}-no-{i}", price, "No", tags)
 
 
 def test_counts_markets_in_the_same_bucket():
@@ -281,3 +285,82 @@ def test_out_of_range_price_raises(price):
     conn = make_conn()
     with pytest.raises(ValueError):
         similar_record(conn, price)
+
+def test_recurring_markets_count_by_default():
+    conn = make_conn()
+    save_many(conn, 0.40, yes=2, no=3, prefix="plain-")
+    save_many(conn, 0.40, yes=4, no=1, tags=["Weekly"], prefix="weekly-")
+    result = similar_record(conn, 0.45)
+    assert result["n"] == 10
+    assert result["yes"] == 6
+
+
+def test_excluding_recurring_removes_them_from_n_and_yes():
+    conn = make_conn()
+    save_many(conn, 0.40, yes=2, no=3, prefix="plain-")
+    save_many(conn, 0.40, yes=4, no=1, tags=["Weekly"], prefix="weekly-")
+    result = similar_record(conn, 0.45, exclude_recurring=True)
+    assert result["n"] == 5
+    assert result["yes"] == 2
+    assert result["rate"] == pytest.approx(0.4)
+
+
+def test_tags_are_matched_regardless_of_capitalization():
+    conn = make_conn()
+    save_many(conn, 0.40, yes=1, no=1, tags=["RECURRING"], prefix="r-")
+    assert similar_record(conn, 0.40, exclude_recurring=True)["n"] == 0
+
+
+def test_markets_with_no_tags_count_as_not_recurring():
+    conn = make_conn()
+    save_many(conn, 0.40, yes=1, no=1)
+    assert similar_record(conn, 0.40, exclude_recurring=True)["n"] == 2
+
+
+def test_markets_with_an_empty_tag_list_count_as_not_recurring():
+    conn = make_conn()
+    save_many(conn, 0.40, yes=1, no=1, tags=[])
+    assert similar_record(conn, 0.40, exclude_recurring=True)["n"] == 2
+
+
+def test_markets_with_only_unrelated_tags_are_kept():
+    conn = make_conn()
+    save_many(conn, 0.40, yes=1, no=1, tags=["Politics", "Elections"])
+    assert similar_record(conn, 0.40, exclude_recurring=True)["n"] == 2
+
+
+def test_enough_is_judged_on_the_reduced_count():
+    conn = make_conn()
+    save_many(conn, 0.40, yes=10, no=15, prefix="plain-")
+    save_many(conn, 0.40, yes=2, no=3, tags=["Weekly"], prefix="weekly-")
+    assert similar_record(conn, 0.40)["enough"] is True
+    reduced = similar_record(conn, 0.40, exclude_recurring=True)
+    assert reduced["n"] == 25
+    assert reduced["enough"] is False
+
+
+def test_a_bucket_of_only_recurring_markets_ends_up_empty_without_crashing():
+    conn = make_conn()
+    save_many(conn, 0.40, yes=3, no=3, tags=["Tweet Markets"])
+    result = similar_record(conn, 0.40, exclude_recurring=True)
+    assert result["n"] == 0
+    assert result["rate"] is None
+    assert result["interval"] is None
+    assert result["enough"] is False
+
+
+def test_excluding_recurring_only_changes_the_bucket_it_filters():
+    conn = make_conn()
+    save_many(conn, 0.40, yes=1, no=1, tags=["Weekly"], prefix="a-")
+    save_many(conn, 0.60, yes=1, no=1, tags=["Weekly"], prefix="b-")
+    assert similar_record(conn, 0.40, exclude_recurring=True)["n"] == 0
+    assert similar_record(conn, 0.60, exclude_recurring=True)["n"] == 0
+    assert similar_record(conn, 0.40)["n"] == 2
+    assert similar_record(conn, 0.60)["n"] == 2
+
+
+def test_malformed_tags_raise_instead_of_being_ignored():
+    conn = make_conn()
+    upsert_record(conn, {"id": "bad", "ref_price": 0.40, "winner": "Yes", "tags": "not json"})
+    with pytest.raises(ValueError):
+        similar_record(conn, 0.40, exclude_recurring=True)

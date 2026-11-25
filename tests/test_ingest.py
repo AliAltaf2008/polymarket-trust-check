@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from trustcheck.ingest import (
     is_sports,
     nearest_price,
@@ -7,7 +9,11 @@ from trustcheck.ingest import (
     was_disputed,
     winner,
     build_record,
+    skip_reason,
+    anchor_time,
 )
+
+from trustcheck.ingest import RECURRING_TAGS, is_recurring
 
 YES_NO = ["Yes", "No"]
 
@@ -201,3 +207,127 @@ def test_no_yes_outcome_gives_no_token():
 def test_short_token_list_gives_none():
     raw = {**RAW_MARKET, "outcomes": '["No", "Yes"]', "clobTokenIds": '["111"]'}
     assert build_record(raw)["yes_token_id"] is None
+
+def test_max_gap_rejects_a_stale_point():
+    assert nearest_price(HISTORY, 1000, max_gap=50) is None
+
+
+def test_max_gap_keeps_a_close_point():
+    assert nearest_price(HISTORY, 190, max_gap=50) == 0.2
+
+
+def test_gap_exactly_equal_to_max_gap_is_kept():
+    assert nearest_price(HISTORY, 250, max_gap=50) == 0.2
+
+
+def test_max_gap_zero_means_exact_match_only():
+    assert nearest_price(HISTORY, 200, max_gap=0) == 0.2
+    assert nearest_price(HISTORY, 201, max_gap=0) is None
+
+
+def test_no_max_gap_means_no_limit():
+    assert nearest_price(HISTORY, 1000) == 0.3
+
+
+
+
+def clean_record():
+    return build_record(RAW_MARKET)
+
+
+def test_clean_record_is_kept():
+    assert skip_reason(clean_record()) is None
+
+
+def test_sports_record_is_skipped():
+    assert skip_reason({**clean_record(), "is_sports": True}) == "sports"
+
+
+def test_missing_winner_is_skipped():
+    assert skip_reason({**clean_record(), "winner": None}) == "no_winner"
+
+
+def test_missing_close_time_is_skipped():
+    assert skip_reason({**clean_record(), "close_time": None}) == "no_close_time"
+
+
+def test_empty_close_time_is_skipped():
+    # An empty string is just as unusable as None.
+    assert skip_reason({**clean_record(), "close_time": ""}) == "no_close_time"
+
+
+def test_missing_token_id_is_skipped():
+    assert skip_reason({**clean_record(), "yes_token_id": None}) == "no_token_id"
+
+
+def test_sports_is_reported_before_other_problems():
+    record = {**clean_record(), "is_sports": True, "winner": None}
+    assert skip_reason(record) == "sports"
+
+
+def test_winner_is_reported_before_missing_token():
+    record = {**clean_record(), "winner": None, "yes_token_id": None}
+    assert skip_reason(record) == "no_winner"
+
+
+
+def test_disputed_market_uses_the_deadline():
+    assert anchor_time("2026-06-15T00:00:00Z", "2026-06-18T00:32:19Z") == "2026-06-15T00:00:00Z"
+
+
+def test_early_close_uses_the_close_time():
+    assert anchor_time("2025-06-23T12:00:00Z", "2025-04-17T08:51:19Z") == "2025-04-17T08:51:19Z"
+
+
+def test_same_day_close_uses_the_deadline():
+    assert anchor_time("2025-01-20T12:00:00Z", "2025-01-20T22:51:36Z") == "2025-01-20T12:00:00Z"
+
+
+def test_missing_end_date_falls_back_to_close():
+    assert anchor_time(None, "2025-01-20T22:51:36Z") == "2025-01-20T22:51:36Z"
+
+
+def test_missing_close_time_falls_back_to_end_date():
+    assert anchor_time("2025-01-20T12:00:00Z", None) == "2025-01-20T12:00:00Z"
+
+
+def test_both_missing_gives_none():
+    assert anchor_time(None, None) is None
+
+
+def test_tie_returns_end_date():
+    assert anchor_time("2025-01-20T12:00:00Z", "2025-01-20T12:00:00+00:00") == "2025-01-20T12:00:00Z"
+
+
+def test_build_record_includes_anchor_time():
+    assert build_record(RAW_MARKET)["anchor_time"] == "2025-01-20T12:00:00Z"
+
+def test_the_recurring_set_is_the_four_labels_we_chose():
+    assert RECURRING_TAGS == {"recurring", "tweet markets", "weekly", "monthly"}
+
+
+@pytest.mark.parametrize("label", ["Recurring", "Tweet Markets", "Weekly", "Monthly"])
+def test_each_recurring_label_matches(label):
+    assert is_recurring([label]) is True
+
+
+@pytest.mark.parametrize("label", ["RECURRING", "recurring", "tWeet MaRkEts"])
+def test_matching_ignores_capitalization(label):
+    assert is_recurring([label]) is True
+
+
+def test_one_matching_label_among_others_is_enough():
+    assert is_recurring(["Politics", "Weekly", "Crypto"]) is True
+
+
+def test_unrelated_labels_do_not_match():
+    assert is_recurring(["Politics", "Crypto", "Elections"]) is False
+
+
+def test_the_whole_label_must_match_not_part_of_it():
+    assert is_recurring(["Weekly Recap", "Monthly Review"]) is False
+
+
+@pytest.mark.parametrize("tags", [[], None])
+def test_missing_or_empty_tags_are_not_recurring(tags):
+    assert is_recurring(tags) is False

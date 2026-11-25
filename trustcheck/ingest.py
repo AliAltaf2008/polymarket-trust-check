@@ -33,17 +33,29 @@ def is_sports(tag_labels):
     label_check = any(label.lower() in SPORTS_TAGS for label in tag_labels)
     return label_check
 
+RECURRING_TAGS = {"recurring", "tweet markets", "weekly", "monthly"}
+
+def is_recurring(tag_labels):
+    if not tag_labels:
+        return False
+
+    return any(label.lower() in RECURRING_TAGS for label in tag_labels)
+
 def was_disputed(statuses):
     #Checks the status history of the market to ensure that it is not disputed and therefore cause the program to ingest bad data
     if not statuses:
         return False
     return "disputed" in statuses
 
-def nearest_price(history, ref_ts):
+def nearest_price(history, ref_ts, max_gap=None):
     #history is a list of prices and times so we compare which time is closest to the reference time and output that price
     if not history:
         return None
     closest = min(history, key=lambda point: abs(point["t"] - ref_ts))
+
+    #Reject a price gap that is greater than the max_gap as it is considered as a stale price
+    if max_gap is not None and abs(closest["t"] - ref_ts) > max_gap:
+        return None
 
     return closest["p"]
 
@@ -88,5 +100,33 @@ def build_record(raw):
         "tags": json.dumps(labels),
         "is_sports": is_sports(labels),
         "was_disputed": was_disputed(statuses),
-        "yes_token_id": yes_token_id
+        "yes_token_id": yes_token_id,
+        "anchor_time": anchor_time(raw.get("endDate"), raw.get("umaEndDate")),
     }
+
+def skip_reason(record):
+    """Return the first reason to drop a record or return None if it is kept"""
+
+    if record["is_sports"]:
+        return "sports"
+    if record["winner"] is None:
+        return "no_winner"
+    if not record["close_time"]:
+        return "no_close_time"
+    if record["yes_token_id"] is None:
+        return "no_token_id"
+
+    return None
+
+def anchor_time(end_date, close_time):
+    #NOTE:endDate is the scheduled end for the market and closedTime/umeEndDate is the actual end time of the market and disputing the market
+    # or closing the market early causes the closeTime to differ from endDate
+    if not end_date:
+        return close_time or None
+    if not close_time:
+        return end_date
+
+    end = datetime.fromisoformat(end_date.replace("Z", "+00:00"))
+    close = datetime.fromisoformat(close_time.replace("Z", "+00:00"))
+
+    return end_date if end <= close else close_time
