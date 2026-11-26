@@ -75,12 +75,35 @@ def test_closed_markets_are_left_out_without_a_market_slug():
 
 @pytest.mark.parametrize("tokens", [None, "", "[]"])
 def test_markets_without_tokens_are_left_out(tokens):
-    # "[]" is a non-empty string, so it passes the filter: this documents the gap.
+    # "[]" is a non-empty string, but it holds no tokens, so it must be left out too.
     event = {"markets": [mk("real"), mk("placeholder", tokens=tokens)]}
     slugs = [m["slug"] for m in candidate_markets(event)]
     assert "real" in slugs
-    if tokens in (None, ""):
-        assert "placeholder" not in slugs
+    assert "placeholder" not in slugs
+
+
+def test_a_valid_token_list_is_kept():
+    event = {"markets": [mk("real", tokens='["a","b"]')]}
+    assert [m["slug"] for m in candidate_markets(event)] == ["real"]
+
+
+def test_a_missing_token_key_is_dropped():
+    market = {"slug": "no-key", "closed": False}     # no clobTokenIds at all
+    assert candidate_markets({"markets": [market]}) == []
+
+
+def test_an_empty_token_list_is_dropped():
+    # This is the case that used to slip through and crash later.
+    assert candidate_markets({"markets": [mk("empty", tokens="[]")]}) == []
+
+
+def test_unreadable_token_text_is_dropped():
+    assert candidate_markets({"markets": [mk("broken", tokens="not json")]}) == []
+
+
+def test_tokens_that_are_not_a_list_are_dropped():
+    # Valid JSON, but a dict is not a list of token ids.
+    assert candidate_markets({"markets": [mk("odd", tokens='{"a": 1}')]}) == []
 
 
 def test_a_market_slug_picks_exactly_that_market():

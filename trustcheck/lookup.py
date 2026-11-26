@@ -26,6 +26,17 @@ def parse_polymarket_url(text):
 
 
 
+def _has_tokens(market):
+    """True only if clobTokenIds is JSON text for a non-empty list, like '["123", "456"]'."""
+    # The API sends clobTokenIds as a string, so "[]" is truthy even though it holds no tokens.
+    # Parsing it is the only way to tell a real list from an empty or broken one.
+    try:
+        tokens = json.loads(market.get("clobTokenIds"))
+    except (TypeError, ValueError):
+        # TypeError: the key is missing (None). ValueError: the text isn't valid JSON.
+        return False
+    return isinstance(tokens, list) and len(tokens) > 0
+
 def candidate_markets(event, market_slug = None):
     markets = event.get("markets") or []
 
@@ -35,7 +46,7 @@ def candidate_markets(event, market_slug = None):
             raise ValueError(f"no market with slug {market_slug!r} in this event")
         return matches
 
-    return [m for m in markets if not m.get("closed") and m.get("clobTokenIds")]
+    return [m for m in markets if not m.get("closed") and _has_tokens(m)]
 
 
 def _volume(markets):
