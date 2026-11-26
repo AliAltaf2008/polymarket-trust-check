@@ -116,6 +116,23 @@ def test_a_requested_market_is_returned_even_if_closed():
     assert [m["slug"] for m in candidate_markets(event, "done")] == ["done"]
 
 
+def test_a_named_market_with_valid_tokens_is_returned():
+    event = {"markets": [mk("a"), mk("b", tokens='["x","y"]')]}
+    assert [m["slug"] for m in candidate_markets(event, "b")] == ["b"]
+
+
+def test_a_named_market_with_an_empty_token_list_raises():
+    # The link points straight at it, so silently skipping it would be confusing: say why instead.
+    with pytest.raises(ValueError, match="no order book"):
+        candidate_markets({"markets": [mk("a", tokens="[]")]}, "a")
+
+
+def test_a_named_market_without_a_token_key_raises():
+    market = {"slug": "a", "closed": False}     # no clobTokenIds at all
+    with pytest.raises(ValueError, match="no order book"):
+        candidate_markets({"markets": [market]}, "a")
+
+
 def test_an_unknown_market_slug_raises():
     with pytest.raises(ValueError):
         candidate_markets({"markets": [mk("a")]}, "nope")

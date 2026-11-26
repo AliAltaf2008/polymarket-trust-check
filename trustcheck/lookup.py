@@ -44,6 +44,10 @@ def candidate_markets(event, market_slug = None):
         matches = [m for m in markets if m.get("slug") == market_slug]
         if not matches:
             raise ValueError(f"no market with slug {market_slug!r} in this event")
+        # The link named this market, so fail with a clear message rather than returning
+        # something that crashes later when the app tries to read its order book.
+        if not _has_tokens(matches[0]):
+            raise ValueError("that market has no order book to read")
         return matches
 
     return [m for m in markets if not m.get("closed") and _has_tokens(m)]
