@@ -113,7 +113,7 @@ def rec(**overrides):
 
 def test_similar_line_normal():
     line = similar_line("all", rec())
-    assert "5%-30%" in line and "326 markets" in line and "18.4%" in line
+    assert "5%-30%" in line and "60 of 326" in line and "18.4%" in line
     assert "14.6% to 23.0%" in line
 
 def test_similar_line_none():

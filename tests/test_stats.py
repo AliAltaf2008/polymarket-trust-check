@@ -111,23 +111,30 @@ def test_one_is_the_last_bucket():
 
 
 @pytest.mark.parametrize("price, expected", [
-    (0.02, 0), (0.12, 1), (0.40, 2), (0.60, 3), (0.85, 4),
+    (0.02, 1), (0.12, 3), (0.40, 5), (0.60, 6), (0.85, 7),
 ])
 def test_price_inside_a_bucket(price, expected):
     assert bucket_index(price) == expected
 
 
 @pytest.mark.parametrize("price, expected", [
-    (0.05, 1), (0.30, 2), (0.50, 3), (0.70, 4),
+    (0.05, 2), (0.30, 5), (0.50, 6), (0.70, 7),
 ])
 def test_price_on_an_edge_goes_to_the_upper_bucket(price, expected):
     assert bucket_index(price) == expected
 
 
 @pytest.mark.parametrize("price, expected", [
-    (0.0499, 0), (0.2999, 1), (0.4999, 2), (0.6999, 3),
+    (0.0499, 1), (0.2999, 4), (0.4999, 5), (0.6999, 6),
 ])
 def test_price_just_below_an_edge_stays_in_the_lower_bucket(price, expected):
+    assert bucket_index(price) == expected
+
+
+@pytest.mark.parametrize("price, expected", [
+    (0.0, 0), (0.0099, 0), (0.01, 1), (0.0999, 2), (0.10, 3), (0.1999, 3), (0.20, 4),
+])
+def test_new_low_edges(price, expected):
     assert bucket_index(price) == expected
 
 
@@ -364,3 +371,15 @@ def test_malformed_tags_raise_instead_of_being_ignored():
     upsert_record(conn, {"id": "bad", "ref_price": 0.40, "winner": "Yes", "tags": "not json"})
     with pytest.raises(ValueError):
         similar_record(conn, 0.40, exclude_recurring=True)
+
+
+def test_zero_yes_bucket_gives_a_zero_rate_and_a_real_interval():
+    conn = make_conn()
+    save_many(conn, 0.002, yes=0, no=40)
+    result = similar_record(conn, 0.002)
+    assert result["n"] == 40
+    assert result["yes"] == 0
+    assert result["rate"] == 0.0
+    low, high = result["interval"]
+    assert low == 0.0
+    assert high > 0

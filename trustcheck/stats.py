@@ -2,7 +2,7 @@ import math
 import bisect
 import json
 from trustcheck.ingest import is_recurring
-BUCKET_EDGES = [0.0, 0.05, 0.30, 0.50, 0.70, 1.0]
+BUCKET_EDGES = [0.0, 0.01, 0.05, 0.10, 0.20, 0.30, 0.50, 0.70, 1.0]
 NUM_BUCKETS = len(BUCKET_EDGES) - 1
 MIN_SAMPLE = 30
 

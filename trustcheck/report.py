@@ -58,5 +58,4 @@ def similar_line(label, s):
         return f"{label} ({where}): not enough similar markets (only {s['n']})"
 
     ilo, ihi = s["interval"]
-    return (f"{label} ({where}): {s['n']} markets, {s['rate']:.1%} resolved YES "
-            f"(95% range {ilo:.1%} to {ihi:.1%})")
+    return f"{label} ({where}): {s['yes']} of {s['n']} resolved YES ({s['rate']:.1%}, 95% range {ilo:.1%} to {ihi:.1%})"
