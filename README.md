@@ -35,15 +35,15 @@ repo, so build it first with `run_ingest.py`:
 ```zsh
 python run_ingest.py [min] [max|none] [target] [page_size] [date_min|default] [date_max|default]
 
-# example: volume $5,000 to $500,000, stop after 100 kept markets, 50 per page, markets ending in 2024
+# example: ask for volume $5,000 to $500,000, stop after 100 kept markets, 50 per page, markets ending in 2024
 python run_ingest.py 5000 500000 100 50 2024-01-01 2025-01-01
 ```
 
 | Argument | Meaning | Default |
 |---|---|---|
-| `min` | minimum market volume in dollars | 5000 |
+| `min` | minimum market volume in dollars. Results arrive from highest volume to lowest, so a small `target` stops well above the minimum | 5000 |
 | `max` | maximum volume, or `none` for no limit | none |
-| `target` | stop once this many markets are kept | 20 |
+| `target` | stop once this many markets are kept. Results arrive from highest volume to lowest, so a small target stops well above `min` | 20 |
 | `page_size` | markets per API page (the API allows at most 100) | 20 |
 | `date_min` / `date_max` | window for the market's end date, as `YYYY-MM-DD`, or `default` | 2025-01-01 to 2026-11-01 |
 
@@ -86,7 +86,9 @@ python run_ingest.py 50000 500000 400 50 2023-01-01 2024-01-01
 #### What the current database holds
 
 1,479 resolved markets with end dates from February 2023 to November 2026: 135 in 2023, 619 in
-2024, 318 in 2025 and 407 in 2026. By volume, 267 are $5,000–$50,000, 887 are $50,000–$500,000 and
+2024, 318 in 2025 and 407 in 2026. By volume, the lowest band is $42,600 to $50,000 (267 markets; the $5,000 floor in the ingest settings was
+never reached, because each run takes the highest-volume markets first and stops at its target),
+887 are $50,000–$500,000 and
 325 are over $500,000. 318 are recurring-series markets, and 54 were disputed (disputed markets are
 kept, not excluded). The file also contains 100 further rows with no winner or reference price
 (unresolved, with end dates in 2027–2028). The similar-market record ignores them.
@@ -185,9 +187,9 @@ The tests don't need the database or the internet.
    turned out, not the odds for this market.
 5. **Fee rules can change.** The formula follows the fee schedule Polymarket publishes for each
    market today.
-6. **Small markets are not in the sample.** Every market in the record had at least $5,000 of
-   volume. A market with very little trading is compared with markets that were more heavily
-   traded, so its record may not describe it well.
+6. **Small markets are not in the sample.** The smallest market in the record had about $42,600 of
+   volume. A market with much less trading than that is compared with markets that were far more
+   heavily traded, so its record may not describe it well.
 7. **Validated on one market so far.** The live-site comparison covers one market on one day.
    Other fee rates and price levels follow the same formula but haven't been checked by hand.
 
