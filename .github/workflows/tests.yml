@@ -1,0 +1,23 @@
+# Runs the test suite on GitHub's servers for every push and pull request.
+# The tests use in-memory databases and never call the network, so no database file or secret is needed.
+name: tests
+
+on: [push, pull_request]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      # Download the repo's code onto the runner.
+      - uses: actions/checkout@v4
+
+      # Same Python as the local .venv (3.12), so CI and your machine behave the same.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Pinned versions from requirements.txt, so a new library release can't break CI by surprise.
+      - run: pip install -r requirements.txt
+
+      # pyproject.toml already tells pytest where the tests are and where to import from.
+      - run: python -m pytest -q
