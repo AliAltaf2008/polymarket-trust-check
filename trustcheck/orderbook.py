@@ -54,10 +54,17 @@ def walk_asks(asks, dollars):
         "fills": fills,
     }
 
-def trade_cost(book, dollars, fee_schedule = None):
-    """What is costs to buy dollars of 'Yes' in the market"""
+def trade_cost(book, dollars, fee_schedule=None):
+    """What it costs to buy `dollars` of 'Yes' in the market."""
     fill = walk_asks(book["asks"], dollars)
-    fee = sum(taker_fee(level_shares, level_price, fee_schedule) for level_price, level_shares in fill["fills"])
+    fee = sum(taker_fee(level_shares, level_price, fee_schedule)
+              for level_price, level_shares in fill["fills"])
+
+    if fill["avg_price"]:
+        fee_shares = fee / fill["avg_price"]
+    else:
+        fee_shares = 0.0
+    shares_net = fill["shares"] - fee_shares
 
     bids = book["bids"]
     asks = book["asks"]
@@ -73,7 +80,7 @@ def trade_cost(book, dollars, fee_schedule = None):
 
     if mid is not None and fill["shares"] > 0:
         cost_dollars = (fill["avg_price"] - mid) * fill["shares"]
-        #Divide by the amount that actually absorbed in the market so use "spent"
+        # Divide by what was actually spent, not what was asked for.
         cost_pct = cost_dollars / fill["spent"]
     else:
         cost_dollars = None
@@ -96,9 +103,10 @@ def trade_cost(book, dollars, fee_schedule = None):
         "cost_dollars": cost_dollars,
         "cost_pct": cost_pct,
         "fee": fee,
+        "fee_shares": fee_shares,
+        "shares_net": shares_net,
         "total_cost": total_cost,
-        "total_pct": total_pct
-
+        "total_pct": total_pct,
     }
 
 def fee_schedule_for(market):
