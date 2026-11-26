@@ -4,6 +4,8 @@
 > **Informational only, not financial advice.**
 > **Read-only:** no wallet, no login, no trading. It only reads public market data.
 
+**Status:** private pre-release, not yet public.
+
 ## What it is
 
 Paste a Polymarket link, pick a market (if the event has several), and PolyChecker shows:
@@ -49,7 +51,45 @@ It stops at the target, when the API runs out of pages, or after 30 pages. It sa
 page, so re-running adds to the database instead of starting over. At the end it prints how many
 markets were dropped and why.
 
-TODO: list the exact runs (bands and windows) used to build the current database.
+The current database was built by running `run_ingest.py` several times, by volume band and
+end-date window. These are the runs used to build it, not necessarily the only way to build one.
+Re-running adds to the database, so repeated lines are expected.
+
+Default window (market end dates 2025-01-01 to 2026-11-01):
+
+```zsh
+python run_ingest.py 50000 500000 30
+python run_ingest.py 50000 500000 20 20
+python run_ingest.py 50000 500000 80 50
+python run_ingest.py 50000 500000 200 50
+python run_ingest.py 5000 50000 60 50
+python run_ingest.py 5000 50000 150 100
+python run_ingest.py 500000 none 40 50
+```
+
+2024 only:
+
+```zsh
+python run_ingest.py 5000 500000 100 50 2024-01-01 2025-01-01
+python run_ingest.py 5000 50000 100 50 2024-01-01 2025-01-01
+python run_ingest.py 50000 500000 150 50 2024-01-01 2025-01-01
+python run_ingest.py 500000 none 80 50 2024-01-01 2025-01-01
+python run_ingest.py 50000 500000 400 50 2024-01-01 2025-01-01
+```
+
+2023 only:
+
+```zsh
+python run_ingest.py 50000 500000 400 50 2023-01-01 2024-01-01
+```
+
+#### What the current database holds
+
+1,479 resolved markets with end dates from February 2023 to November 2026: 135 in 2023, 619 in
+2024, 318 in 2025 and 407 in 2026. By volume, 267 are $5,000–$50,000, 887 are $50,000–$500,000 and
+325 are over $500,000. 318 are recurring-series markets, and 54 were disputed (disputed markets are
+kept, not excluded). The file also contains 100 further rows with no winner or reference price
+(unresolved, with end dates in 2027–2028). The similar-market record ignores them.
 
 ### 2. Run the app
 
@@ -91,9 +131,9 @@ The tests don't need the database or the internet.
 
   `rate` and `exponent` come from the market's own `feeSchedule`. A market with `feesEnabled`
   false has no fee.
-- **On buys, the fee is taken out of the shares you receive**, not added to the price. Verified on
-  the live site (see [Validation](#validation)): $100 at 0.2¢ shows 47,505 shares, not 50,000.
-  Shares after the fee = shares − fee ÷ average price.
+- **On buys, the fee is taken out of the shares you receive**, not added to the price. This was
+  checked against the live site on one market (see [Validation](#validation)): $100 at 0.2¢ shows
+  47,505 shares, not 50,000. Shares after the fee = shares − fee ÷ average price.
 - **Total cost** = trade cost + fee.
 - **Percentages** are of the amount actually spent, which can be less than the amount asked for
   when the book is thin.
@@ -145,12 +185,19 @@ The tests don't need the database or the internet.
    turned out, not the odds for this market.
 5. **Fee rules can change.** The formula follows the fee schedule Polymarket publishes for each
    market today.
-6. **The sample leans toward big markets.** The ingest orders by volume, so famous, liquid political
-   and event markets are over-represented. That can make the record less reliable for small markets.
+6. **Small markets are not in the sample.** Every market in the record had at least $5,000 of
+   volume. A market with very little trading is compared with markets that were more heavily
+   traded, so its record may not describe it well.
+7. **Validated on one market so far.** The live-site comparison covers one market on one day.
+   Other fee rates and price levels follow the same formula but haven't been checked by hand.
 
 ## Validation
 
-Polymarket's site compared with PolyChecker on the Phil Murphy market, buying $100 of YES:
+Polymarket's site compared with PolyChecker on one market, buying $100 of YES:
+**"Will Phil Murphy win the 2028 Democratic presidential nomination?"**
+([event page](https://polymarket.com/event/democratic-presidential-nominee-2028); choose Phil Murphy
+in the list). Compared on 2026-11-26: the PolyChecker snapshot was taken at 21:09 UTC and the site
+was read a few minutes later.
 
 | | Polymarket site | PolyChecker |
 |---|---|---|
@@ -159,6 +206,6 @@ Polymarket's site compared with PolyChecker on the Phil Murphy market, buying $1
 | Average price | 0.2¢ | 0.2¢ |
 | Shares received | 47,505 | 47,505 |
 
-TODO: add the market link and the date of the comparison.
-
 This case is also a test: `test_trade_cost_fee_is_taken_in_shares` in `tests/test_orderbook.py`.
+
+TODO: add a screenshot and the demo video link.
