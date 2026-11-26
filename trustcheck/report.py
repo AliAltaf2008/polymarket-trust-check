@@ -46,6 +46,15 @@ def cost_line(c):
     return (f"${d}: trade cost ${c['cost_dollars']:.2f} + fee ${c['fee']:.2f} "
             f"= ${c['total_cost']:.2f} ({c['total_pct']:.1%}){note}")
 
+def cost_per_share(c):
+    """Total cost (trade cost + fee) spread over the shares you actually keep, in dollars per share.
+    `c` is one entry of report["costs"]. Returns None when it can't be measured."""
+    # No midpoint (no bids) means no total cost, and with no shares there is nothing to divide by.
+    if c["total_cost"] is None or c["shares_net"] <= 0:
+        return None
+    # Divide by shares_net, not shares: the fee is taken out of the shares you receive.
+    return c["total_cost"] / c["shares_net"]
+
 def similar_line(label, s):
     """One card line for a similar-market record. `s` is similar_record's dict, or None."""
     if s is None:

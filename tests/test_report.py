@@ -3,7 +3,7 @@ import sqlite3
 import pytest
 
 from trustcheck.db import init_db, upsert_record
-from trustcheck.report import TRADE_SIZES, build_report, cost_line, similar_line
+from trustcheck.report import TRADE_SIZES, build_report, cost_line, cost_per_share, similar_line
 
 LIVE = {"exponent": 1, "rate": 0.05, "takerOnly": True, "rebateRate": 0.25}
 BOOK = {"bids": [(0.48, 1000.0)], "asks": [(0.50, 100.0), (0.52, 200.0)],
@@ -124,3 +124,17 @@ def test_similar_line_not_enough():
     assert "not enough similar markets" in line and "12" in line
     assert "%" in line
     assert "resolved YES" not in line  
+
+def test_cost_per_share_divides_total_cost_by_shares_kept():
+    # $3.00 total over 150 shares kept is 2 cents per share.
+    assert cost_per_share(cost(shares_net=150.0)) == pytest.approx(0.02)
+
+
+def test_cost_per_share_is_none_without_bids():
+    # No bids: no midpoint, so total_cost is None and there is nothing to spread out.
+    assert cost_per_share(cost(total_cost=None, shares_net=150.0)) is None
+
+
+def test_cost_per_share_is_none_when_nothing_was_bought():
+    # Dividing by zero shares would crash, so it must return None first.
+    assert cost_per_share(cost(shares=0, shares_net=0)) is None

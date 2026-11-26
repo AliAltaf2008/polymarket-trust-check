@@ -7,7 +7,7 @@ from trustcheck.api import fetch_event_by_slug, fetch_order_book
 from trustcheck.db import get_connection
 from trustcheck.lookup import candidate_markets, choosable, parse_polymarket_url
 from trustcheck.orderbook import parse_book
-from trustcheck.report import build_report, cost_line, similar_line
+from trustcheck.report import build_report, cost_line, cost_per_share, similar_line
 
 st.set_page_config(page_title="Polychecker", page_icon="🔍", layout="centered")
 
@@ -187,6 +187,10 @@ if url:
                 else:
                     col.metric(f"${c['dollars']:,}", f"{c['total_pct']:.1%}")
                     col.caption(esc(f"${c['total_cost']:.2f} total = ${c['cost_dollars']:.2f} cost + ${c['fee']:.2f} fee"))
+                    # None means it can't be measured, so the line is skipped rather than showing a fake number.
+                    per_share = cost_per_share(c)
+                    if per_share is not None:
+                        col.caption(f"≈ {cents(per_share)} per share above the midpoint")
 
                 # NEW: shares you'd receive. Skipped when nothing could be bought.
                 if c["shares"] > 0:
