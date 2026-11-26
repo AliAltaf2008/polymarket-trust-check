@@ -3,6 +3,27 @@ from trustcheck.stats import similar_record
 
 TRADE_SIZES = (100, 500, 1000)
 
+def sample_volume_floor(conn):
+    """Smallest volume among the markets the similar-market record uses, or None if there are none."""
+    # Same filter as similar_record, so the floor describes exactly the markets being compared.
+    # Read from the database rather than hard-coded, so it stays right after another ingest.
+    # MIN() skips NULLs and gives NULL (None in Python) when no rows match.
+    row = conn.execute(
+        "SELECT MIN(volume) FROM markets WHERE winner IS NOT NULL AND ref_price IS NOT NULL"
+    ).fetchone()
+    return row[0]
+
+def _market_volume(market):
+    """The market's volumeNum as a float, or None if it is missing or unreadable."""
+    raw = market.get("volumeNum")
+    if raw is None:
+        return None
+    # The API sometimes sends numbers as text, so convert; anything unreadable becomes None.
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None
+
 def build_report(market, book, conn):
     schedule = fee_schedule_for(market)
 
@@ -29,6 +50,8 @@ def build_report(market, book, conn):
         "similar_all": similar_all,
         "similar_no_recurring": similar_no_recurring,
         "flags": book_flags(book),
+        "volume": _market_volume(market),
+        "sample_floor": sample_volume_floor(conn),
     }
 
 def cost_line(c):

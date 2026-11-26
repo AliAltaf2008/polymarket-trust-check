@@ -215,6 +215,13 @@ if url:
                 st.markdown(range_bar(lo, hi, s["rate"]), unsafe_allow_html=True)
             st.caption(esc(similar_line(label, s)))
 
+        # Shown once, under both record lines: this market trades less than anything it is compared with.
+        volume, floor = report["volume"], report["sample_floor"]
+        if volume is not None and floor is not None and volume < floor:
+            st.info(esc(f"This market has less trading than any market in the record "
+                        f"(about ${volume:,.0f} vs. at least ${floor:,.0f}), "
+                        f"so the comparison may not fit it well."))
+
     # ---------- Footer ----------
     with st.expander("What do these numbers mean?"):
         st.markdown(

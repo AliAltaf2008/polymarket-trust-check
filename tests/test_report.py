@@ -3,7 +3,14 @@ import sqlite3
 import pytest
 
 from trustcheck.db import init_db, upsert_record
-from trustcheck.report import TRADE_SIZES, build_report, cost_line, cost_per_share, similar_line
+from trustcheck.report import (
+    TRADE_SIZES,
+    build_report,
+    cost_line,
+    cost_per_share,
+    sample_volume_floor,
+    similar_line,
+)
 
 LIVE = {"exponent": 1, "rate": 0.05, "takerOnly": True, "rebateRate": 0.25}
 BOOK = {"bids": [(0.48, 1000.0)], "asks": [(0.50, 100.0), (0.52, 200.0)],
@@ -138,3 +145,43 @@ def test_cost_per_share_is_none_without_bids():
 def test_cost_per_share_is_none_when_nothing_was_bought():
     # Dividing by zero shares would crash, so it must return None first.
     assert cost_per_share(cost(shares=0, shares_net=0)) is None
+
+
+def save_with_volume(conn, market_id, volume, winner="Yes", ref_price=0.40):
+    upsert_record(conn, {"id": market_id, "volume": volume, "winner": winner, "ref_price": ref_price})
+
+
+def test_sample_floor_is_the_smallest_volume_among_kept_markets():
+    conn = make_conn()
+    save_with_volume(conn, "a", 90000.0)
+    save_with_volume(conn, "b", 42600.0)
+    save_with_volume(conn, "c", 500000.0)
+    assert sample_volume_floor(conn) == pytest.approx(42600.0)
+
+
+def test_sample_floor_ignores_rows_the_record_does_not_use():
+    # Same filter as similar_record: a row without a winner or a ref_price isn't in the record,
+    # so its volume must not lower the floor.
+    conn = make_conn()
+    save_with_volume(conn, "kept", 50000.0)
+    save_with_volume(conn, "no-winner", 100.0, winner=None)
+    save_with_volume(conn, "no-price", 200.0, ref_price=None)
+    assert sample_volume_floor(conn) == pytest.approx(50000.0)
+
+
+def test_sample_floor_is_none_for_an_empty_database():
+    assert sample_volume_floor(make_conn()) is None
+
+
+def test_report_includes_volume_and_sample_floor():
+    conn = make_conn()
+    save_with_volume(conn, "kept", 42600.0)
+    report = build_report({**MARKET, "volumeNum": "1234.5"}, BOOK, conn)
+    assert report["volume"] == pytest.approx(1234.5)     # text from the API becomes a number
+    assert report["sample_floor"] == pytest.approx(42600.0)
+
+
+@pytest.mark.parametrize("raw", [None, "n/a"])
+def test_report_volume_is_none_when_missing_or_unreadable(raw):
+    market = dict(MARKET) if raw is None else {**MARKET, "volumeNum": raw}
+    assert build_report(market, BOOK, make_conn())["volume"] is None
