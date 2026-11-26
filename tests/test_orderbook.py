@@ -363,3 +363,26 @@ def test_flags_best_bid_of_exactly_100_dollars_is_not_thin():
 def test_flags_thin_is_judged_on_the_best_bid_only():
     book = make_book(bids=(("0.50", "10"), ("0.45", "5000")))
     assert "thin_best_bid" in book_flags(book)
+
+MURPHY_FEES = {"exponent": 1, "rate": 0.05, "takerOnly": True, "rebateRate": 0.25}
+
+def test_trade_cost_fee_is_taken_in_shares():
+    # Matches the live site: $100 at 0.2c showed 47,505.00 shares, not 50,000.
+    book = make_book(bids=(("0.001", "5000"),), asks=(("0.002", "1000000"),))
+    c = trade_cost(book, 100, MURPHY_FEES)
+    assert c["shares"] == pytest.approx(50000)
+    assert c["fee"] == pytest.approx(4.99)
+    assert c["fee_shares"] == pytest.approx(2495)      # 4.99 / 0.002
+    assert c["shares_net"] == pytest.approx(47505.0)
+
+def test_trade_cost_no_fee_keeps_all_shares():
+    book = make_book(bids=(("0.001", "5000"),), asks=(("0.002", "1000000"),))
+    c = trade_cost(book, 100, None)
+    assert c["fee_shares"] == 0.0
+    assert c["shares_net"] == pytest.approx(c["shares"])
+
+def test_trade_cost_nothing_to_buy_has_zero_shares_net():
+    # No asks: avg_price is None, so the code must fall back to 0 instead of dividing by None.
+    c = trade_cost(make_book(asks=()), 100, MURPHY_FEES)
+    assert c["shares_net"] == 0
+    assert c["fee_shares"] == 0.0
